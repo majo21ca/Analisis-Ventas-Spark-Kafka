@@ -1,0 +1,29 @@
+# Análisis de ventas mediante Apache Spark y Kafka
+
+##  Tecnologías utilizadas
+
+- Python.
+- Apache Spark 3.5.8.
+- Apache Kafka 3.9.2.
+- Java OpenJDK 11.
+- Ubuntu.
+
+##  Archivos del proyecto
+
+- `spark_batch.py`: realiza la carga, limpieza, transformación y análisis de los datos de ventas.
+- `kafka_producer.py`: envía registros de ventas al topic `sales_data` de Kafka.
+- `spark_streaming_consumer.py`: consume los datos de Kafka y calcula estadísticas de ventas por país.
+
+##  Procesamiento batch
+
+Se carga el archivo CSV en Apache Spark. Después, se limpian los datos, se transforman los tipos de variables y se filtran los registros con cantidades y precios positivos.
+
+Posteriormente, se calcula el valor de las ventas y se generan resultados agrupados por producto, país y fecha.
+
+##  Procesamiento en tiempo real
+
+Un productor desarrollado en Python envía registros del archivo CSV al topic `sales_data` de Kafka. La aplicación Spark Structured Streaming consume esos registros y calcula el valor acumulado de las ventas por país.
+
+##  Resultados
+
+El procesamiento batch permite analizar las ventas por producto, país y fecha. El procesamiento en tiempo real permite observar cómo Spark recibe y procesa los registros enviados mediante Kafka.
