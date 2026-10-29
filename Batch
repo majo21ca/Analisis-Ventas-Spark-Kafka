@@ -1,0 +1,109 @@
+# 1. Crear la sesion de Spark
+spark = SparkSession.builder \
+    .appName("AnalisisVentasOnlineRetail") \
+    .master("local[*]") \
+    .getOrCreate()
+
+spark.sparkContext.setLogLevel("WARN")
+
+# 2. Ruta del archivo CSV
+ruta = "/home/vboxuser/proyecto_ventas/datos/online_retail.csv"
+
+# 3. Cargar los datos
+df = spark.read.csv(ruta, header=True, inferSchema=True, encoding="UTF-8")
+
+print("\n===== 1. ESTRUCTURA DE LOS DATOS =====")
+df.printSchema()
+
+print("\n===== 2. PRIMEROS REGISTROS =====")
+df.show(5, truncate=False)
+
+print("\n===== 3. TOTAL DE REGISTROS ORIGINALES =====")
+total_original = df.count()
+print("Registros originales:", total_original)
+
+# 4. Eliminar registros sin informacion esencial
+df_limpio = df.dropna(
+    subset=["InvoiceNo", "StockCode", "Quantity", "InvoiceDate", "UnitPrice"]
+)
+
+# 5. Convertir los tipos de datos y corregir el formato de fecha
+df_limpio = df_limpio \
+    .withColumn("Quantity", col("Quantity").cast("double")) \
+    .withColumn("UnitPrice", col("UnitPrice").cast("double")) \
+    .withColumn(
+        "InvoiceDate",
+        to_timestamp(col("InvoiceDate"), "yyyy-MM-dd HH:mm:ss")
+    )
+
+# 6. Excluir cantidades y precios no positivos
+df_limpio = df_limpio.filter(
+    (col("Quantity") > 0) & (col("UnitPrice") > 0)
+)
+
+# 7. Calcular el valor de cada linea de venta
+df_limpio = df_limpio.withColumn(
+    "TotalVenta",
+    col("Quantity") * col("UnitPrice")
+)
+
+print("\n===== 4. DATOS LIMPIOS =====")
+df_limpio.show(10, truncate=False)
+
+print("\n===== 5. RESUMEN GENERAL =====")
+df_limpio.select(
+    count("*").alias("LineasVenta"),
+    spark_sum("Quantity").alias("UnidadesVendidas"),
+    spark_sum("TotalVenta").alias("IngresosTotales")
+).show(truncate=False)
+
+# 8. Productos mas vendidos
+print("\n===== 6. DIEZ PRODUCTOS MAS VENDIDOS =====")
+productos = df_limpio.groupBy("StockCode", "Description").agg(
+    spark_sum("Quantity").alias("UnidadesVendidas"),
+    spark_sum("TotalVenta").alias("Ingresos")
+).orderBy(desc("UnidadesVendidas"))
+
+productos.show(10, truncate=False)
+
+# 9. Ingresos por pais
+print("\n===== 7. INGRESOS POR PAIS =====")
+paises = df_limpio.groupBy("Country").agg(
+    spark_sum("TotalVenta").alias("Ingresos"),
+    count("*").alias("LineasVenta")
+).orderBy(desc("Ingresos"))
+
+paises.show(10, truncate=False)
+
+# 10. Ingresos por fecha
+print("\n===== 8. INGRESOS POR FECHA =====")
+ventas_fecha = df_limpio.groupBy(
+    col("InvoiceDate").cast("date").alias("Fecha")
+).agg(
+    spark_sum("TotalVenta").alias("Ingresos")
+).orderBy("Fecha")
+
+ventas_fecha.show(10, truncate=False)
+
+# 11. Guardar resultados en archivos CSV
+salida = "/home/vboxuser/proyecto_ventas/resultados"
+
+productos.write.mode("overwrite").option("header", True).csv(
+    salida + "/productos"
+)
+
+paises.write.mode("overwrite").option("header", True).csv(
+    salida + "/paises"
+)
+
+ventas_fecha.write.mode("overwrite").option("header", True).csv(
+    salida + "/ventas_fecha"
+)
+
+# 12. Mostrar el resumen final
+print("\n===== 9. RESUMEN FINAL =====")
+print("Registros originales:", total_original)
+print("Registros despues de la limpieza:", df_limpio.count())
+print("Resultados guardados en:", salida)
+
+spark.stop()
